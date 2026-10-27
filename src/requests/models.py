@@ -979,21 +979,21 @@ class Response:
     @overload
     def iter_lines(
         self,
-        chunk_size: int = ITER_CHUNK_SIZE,
+        chunk_size: int | None = ITER_CHUNK_SIZE,
         decode_unicode: Literal[False] = False,
         delimiter: bytes | None = None,
     ) -> Iterator[bytes]: ...
     @overload
     def iter_lines(
         self,
-        chunk_size: int = ITER_CHUNK_SIZE,
+        chunk_size: int | None = ITER_CHUNK_SIZE,
         *,
         decode_unicode: Literal[True],
         delimiter: str | bytes | None = None,
     ) -> Iterator[str | bytes]: ...
     def iter_lines(
         self,
-        chunk_size: int = ITER_CHUNK_SIZE,
+        chunk_size: int | None = ITER_CHUNK_SIZE,
         decode_unicode: bool = False,
         delimiter: str | bytes | None = None,
     ) -> Iterator[str | bytes]:
