@@ -94,6 +94,15 @@ def _urllib3_request_context(
     scheme = parsed_request_url.scheme.lower()
     port = parsed_request_url.port
 
+    # A context passed to HTTPAdapter.init_poolmanager lives on the pool
+    # manager. urllib3 copies cert_reqs onto that context and would replace
+    # its verify_mode, so leave cert_reqs unset when one is present.
+    custom_context = None
+    if poolmanager is not None:
+        custom_context = getattr(poolmanager, "connection_pool_kw", {}).get(
+            "ssl_context"
+        )
+
     cert_reqs = "CERT_REQUIRED"
     if verify is False:
         cert_reqs = "CERT_NONE"
@@ -102,7 +111,8 @@ def _urllib3_request_context(
             pool_kwargs["ca_certs"] = verify
         else:
             pool_kwargs["ca_cert_dir"] = verify
-    pool_kwargs["cert_reqs"] = cert_reqs
+    if custom_context is None:
+        pool_kwargs["cert_reqs"] = cert_reqs
     if client_cert is not None:
         if isinstance(client_cert, tuple) and len(client_cert) == 2:
             pool_kwargs["cert_file"] = client_cert[0]
@@ -429,7 +439,9 @@ class HTTPAdapter(BaseAdapter):
         method and use the above logic to change parameters as desired. For
         example, if one wishes to use a custom :py:class:`ssl.SSLContext` one
         must both set ``"ssl_context"`` and based on what else they require,
-        alter the other keys to ensure the desired behaviour.
+        alter the other keys to ensure the desired behaviour. A context passed
+        to :meth:`init_poolmanager` is preserved: ``cert_reqs`` is omitted so
+        urllib3 does not overwrite that context's ``verify_mode``.
 
         :param request:
             The PreparedRequest being sent over the connection.
