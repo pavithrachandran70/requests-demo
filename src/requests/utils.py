@@ -181,8 +181,10 @@ def _is_text_stream(o: Any) -> bool:
 def _text_stream_utf8_length(o: Any, current_position: int) -> int | None:
     """UTF-8 byte length of the unread text, or None if *o* is not text.
 
-    The stream is left at *current_position*. tell() on a text stream is a
-    character offset (or an opaque cookie), so it cannot be used as a byte length.
+    *current_position* must be the value of ``o.tell()`` captured immediately
+    before this call (AD-4). The stream is left at that position. tell() on a
+    text stream is a character offset (or an opaque cookie), so it cannot be
+    used as a byte length.
     """
     if not _is_text_stream(o):
         return None
@@ -251,7 +253,13 @@ def super_len(o: Any) -> int:
                 # Text streams are sent as UTF-8, so Content-Length must be
                 # the byte length rather than the character count from tell().
                 try:
-                    text_length = _text_stream_utf8_length(o, current_position)
+                    # Text streams: position taken BEFORE read (AD-4).
+                    # Captured here, not from the earlier tell(), so the
+                    # text-stream path stays correct if that capture moves.
+                    current_position_for_text = o.tell()
+                    text_length = _text_stream_utf8_length(
+                        o, current_position_for_text
+                    )
                     if text_length is not None:
                         return text_length
 
