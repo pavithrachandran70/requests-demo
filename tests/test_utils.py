@@ -1,5 +1,6 @@
 import copy
 import filecmp
+import io
 import os
 import tarfile
 import zipfile
@@ -9,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+import requests
 from requests import compat
 from requests._internal_utils import unicode_is_ascii
 from requests.cookies import RequestsCookieJar
@@ -151,6 +153,46 @@ class TestSuperLen:
     def test_super_len_with_no_matches(self):
         """Ensure that objects without any length methods default to 0"""
         assert super_len(object()) == 0
+
+
+class TestTextStreamContentLength:
+    """UTF-8 byte length for text streams (AC-1, AC-2, AC-3, AC-4)."""
+
+    def test_text_stringio_utf8_length(self):
+        """AC-1: Text StringIO with non-ASCII calculates UTF-8 byte length and restores position."""
+        text = "héllo"  # 5 chars, 6 UTF-8 bytes
+        stream = io.StringIO(text)
+        req = requests.Request("PUT", "http://example.invalid/x", data=stream)
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "6"
+        # prepare_body keeps the stream as the body. If super_len leaves it
+        # at EOF, the next read is empty and this assertion fails.
+        assert stream.tell() == 0 or stream.read() == text
+
+    def test_binary_bytesio_length_unchanged(self):
+        """AC-2: Binary BytesIO length remains unchanged."""
+        binary = BytesIO("héllo".encode())  # 6 bytes
+        req = requests.Request("PUT", "http://example.invalid/x", data=binary)
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "6"
+
+    def test_ascii_stringio_length(self):
+        """AC-3: ASCII-only text StringIO calculates correct byte length and restores position."""
+        text = "hello"  # 5 chars, 5 bytes
+        stream = io.StringIO(text)
+        req = requests.Request("PUT", "http://example.invalid/x", data=stream)
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "5"
+        assert stream.tell() == 0 or stream.read() == text
+
+    def test_existing_body_length_tests_pass(self):
+        """AC-4: Existing body-length tests remain unaffected.
+
+        Real validation is the full ``tests/test_utils.py`` suite. This
+        method records the acceptance criterion next to the new cases.
+        """
+        assert super_len(io.BytesIO("héllo".encode())) == 6
+        assert super_len(b"hello") == 5
 
 
 class TestGetNetrcAuth:
