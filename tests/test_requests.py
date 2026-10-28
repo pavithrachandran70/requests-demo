@@ -3084,6 +3084,29 @@ def test_content_length_for_string_data_counts_bytes(httpbin):
     assert p.headers["Content-Length"] == length
 
 
+def test_nonstring_multipart_field_names():
+    """Non-string keys in data or files should be coerced to strings in multipart encoding."""
+
+    # AC1: Integer key in data with files set
+    req1 = requests.Request(
+        "POST", "http://example.com", data={1: "a"}, files={"f": b"x"}
+    )
+    prepared1 = req1.prepare()
+    assert prepared1 is not None  # No AttributeError raised
+    assert b'name="1"' in prepared1.body  # Field name "1" appears in multipart body
+
+    # AC2: Integer key in files
+    req2 = requests.Request("POST", "http://example.com", files={1: b"x"})
+    prepared2 = req2.prepare()
+    assert prepared2 is not None  # No AttributeError raised
+    assert b'name="1"' in prepared2.body  # Field name "1" appears in multipart body
+
+    # AC3: Urlencoded behavior preserved (no files)
+    req3 = requests.Request("POST", "http://example.com", data={1: "a"})
+    prepared3 = req3.prepare()
+    assert prepared3.body == "1=a"  # Urlencoded body unchanged
+
+
 def test_json_decode_errors_are_serializable_deserializable():
     json_decode_error = requests.exceptions.JSONDecodeError(
         "Extra data",
