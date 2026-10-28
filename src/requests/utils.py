@@ -157,6 +157,43 @@ def dict_to_sequence(
     return d
 
 
+def _is_text_stream(o: Any) -> bool:
+    """Return True when *o* is a text file object whose read() yields str."""
+    if isinstance(o, io.TextIOBase):
+        return True
+    if isinstance(o, (io.BufferedIOBase, io.RawIOBase)):
+        return False
+
+    mode = getattr(o, "mode", None)
+    if isinstance(mode, str):
+        return "b" not in mode
+
+    read = getattr(o, "read", None)
+    if not callable(read):
+        return False
+    try:
+        sample = read(0)
+    except Exception:
+        return False
+    return isinstance(sample, str)
+
+
+def _text_stream_utf8_length(o: Any, current_position: int) -> int | None:
+    """UTF-8 byte length of the unread text, or None if *o* is not text.
+
+    The stream is left at *current_position*. tell() on a text stream is a
+    character offset (or an opaque cookie), so it cannot be used as a byte length.
+    """
+    if not _is_text_stream(o):
+        return None
+
+    content = o.read()
+    o.seek(current_position or 0)
+    if isinstance(content, str):
+        return len(content.encode("utf-8"))
+    return None
+
+
 def super_len(o: Any) -> int:
     total_length = None
     current_position = 0
@@ -210,8 +247,14 @@ def super_len(o: Any) -> int:
                 current_position = total_length
         else:
             if hasattr(o, "seek") and total_length is None:
-                # StringIO and BytesIO have seek but no usable fileno
+                # StringIO and BytesIO have seek but no usable fileno.
+                # Text streams are sent as UTF-8, so Content-Length must be
+                # the byte length rather than the character count from tell().
                 try:
+                    text_length = _text_stream_utf8_length(o, current_position)
+                    if text_length is not None:
+                        return text_length
+
                     # seek to end of file
                     o.seek(0, 2)
                     total_length = o.tell()

@@ -1,5 +1,6 @@
 import copy
 import filecmp
+import io
 import os
 import tarfile
 import zipfile
@@ -9,6 +10,7 @@ from unittest import mock
 
 import pytest
 
+import requests
 from requests import compat
 from requests._internal_utils import unicode_is_ascii
 from requests.cookies import RequestsCookieJar
@@ -151,6 +153,35 @@ class TestSuperLen:
     def test_super_len_with_no_matches(self):
         """Ensure that objects without any length methods default to 0"""
         assert super_len(object()) == 0
+
+
+class TestTextStreamContentLength:
+    """UTF-8 byte length for text streams (AC-1, AC-2, AC-3)."""
+
+    def test_text_stringio_utf8_length(self):
+        """AC-1: Text StringIO with non-ASCII calculates UTF-8 byte length."""
+        text = "héllo"  # 5 chars, 6 UTF-8 bytes
+        req = requests.Request(
+            "PUT", "http://example.invalid/x", data=io.StringIO(text)
+        )
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "6"
+
+    def test_binary_bytesio_length_unchanged(self):
+        """AC-2: Binary BytesIO length remains unchanged."""
+        binary = BytesIO("héllo".encode())  # 6 bytes
+        req = requests.Request("PUT", "http://example.invalid/x", data=binary)
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "6"
+
+    def test_ascii_stringio_length(self):
+        """AC-3: ASCII-only text StringIO calculates correct byte length."""
+        text = "hello"  # 5 chars, 5 bytes
+        req = requests.Request(
+            "PUT", "http://example.invalid/x", data=io.StringIO(text)
+        )
+        prepared = req.prepare()
+        assert prepared.headers["Content-Length"] == "5"
 
 
 class TestGetNetrcAuth:
