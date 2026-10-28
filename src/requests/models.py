@@ -213,7 +213,7 @@ class RequestEncodingMixin:
                         (
                             field.decode("utf-8")
                             if isinstance(field, bytes)
-                            else field,
+                            else str(field),
                             v.encode("utf-8") if isinstance(v, str) else v,
                         )
                     )
@@ -222,6 +222,11 @@ class RequestEncodingMixin:
             # support for explicit filename
             ft = None
             fh = None
+            # urllib3 calls str.translate() on field names.
+            if isinstance(k, bytes):
+                k = k.decode("utf-8")
+            else:
+                k = str(k)
             if isinstance(v, (tuple, list)):
                 if len(v) == 2:
                     fn, fp = v
